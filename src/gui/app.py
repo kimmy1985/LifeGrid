@@ -209,7 +209,8 @@ class AutomatonApp:
         self._update_display()
 
     def _update_generation_label(self) -> None:
-        self.widgets.gen_label.config(text=f"Generation: {self.state.generation}")
+        generation_text = f"Generation: {self.state.generation}"
+        self.widgets.gen_label.config(text=generation_text)
 
     def reset_simulation(self) -> None:
         automaton = self.state.current_automaton

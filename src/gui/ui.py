@@ -67,255 +67,289 @@ def build_ui(
 ) -> Widgets:
     """Create the Tkinter widget layout and wire up callbacks."""
 
-    control_frame = tk.Frame(root, pady=10)
-    control_frame.pack(side=tk.TOP, fill=tk.X, padx=10)
+    style = ttk.Style(root)
+    if "clam" in style.theme_names():
+        style.theme_use("clam")
+    style.configure("Card.TLabelframe", padding=8)
+    style.configure("Card.TFrame", padding=8)
 
-    # Row 0: Mode selection + primary controls
-    tk.Label(control_frame, text="Mode:").grid(
-        row=0,
-        column=0,
-        padx=5,
-        sticky=tk.E,
+    shell = ttk.Frame(root, padding=10)
+    shell.pack(fill=tk.BOTH, expand=True)
+
+    shell.columnconfigure(1, weight=1)
+    shell.rowconfigure(0, weight=1)
+
+    sidebar = ttk.Frame(shell, style="Card.TFrame")
+    sidebar.grid(row=0, column=0, sticky="nsw", padx=(0, 10))
+
+    content = ttk.Frame(shell)
+    content.grid(row=0, column=1, sticky="nsew")
+    content.rowconfigure(0, weight=1)
+    content.columnconfigure(0, weight=1)
+
+    # Mode and pattern selection
+    mode_frame = ttk.Labelframe(
+        sidebar,
+        text="Automaton",
+        style="Card.TLabelframe",
     )
+    mode_frame.pack(fill=tk.X, pady=(0, 10))
+
+    ttk.Label(mode_frame, text="Mode").pack(anchor=tk.W)
     mode_combo = ttk.Combobox(
-        control_frame,
+        mode_frame,
         textvariable=variables.mode,
         state="readonly",
-        width=20,
         values=list(MODE_PATTERNS.keys()),
     )
-    mode_combo.grid(row=0, column=1, padx=5)
+    mode_combo.pack(fill=tk.X, pady=(2, 6))
     mode_combo.bind(
         "<<ComboboxSelected>>",
         lambda _event: callbacks.switch_mode(variables.mode.get()),
     )
 
-    start_button = tk.Button(
-        control_frame,
-        text="Start",
-        command=lambda: None,  # replaced by caller
-        width=10,
-        bg="#4caf50",
-        fg="white",
-    )
-    start_button.grid(row=0, column=2, padx=5)
-
-    tk.Button(
-        control_frame,
-        text="Step",
-        command=callbacks.step_once,
-        width=8,
-    ).grid(row=0, column=3, padx=5)
-    tk.Button(
-        control_frame,
-        text="Clear",
-        command=callbacks.clear_grid,
-        width=8,
-        bg="#f44336",
-        fg="white",
-    ).grid(row=0, column=4, padx=5)
-    tk.Button(
-        control_frame,
-        text="Reset",
-        command=callbacks.reset_simulation,
-        width=8,
-    ).grid(row=0, column=5, padx=5)
-
-    # Row 1: Pattern and IO controls
-    tk.Label(control_frame, text="Pattern:").grid(
-        row=1,
-        column=0,
-        padx=5,
-        sticky=tk.E,
-    )
+    ttk.Label(mode_frame, text="Pattern").pack(anchor=tk.W)
     pattern_combo = ttk.Combobox(
-        control_frame,
+        mode_frame,
         textvariable=variables.pattern,
         state="readonly",
-        width=20,
     )
-    pattern_combo.grid(row=1, column=1, padx=5)
+    pattern_combo.pack(fill=tk.X, pady=(2, 6))
     pattern_combo.bind(
         "<<ComboboxSelected>>",
         lambda _event: callbacks.load_pattern(),
     )
 
-    tk.Button(
-        control_frame,
+    pattern_actions = ttk.Frame(mode_frame)
+    pattern_actions.pack(fill=tk.X, pady=(4, 0))
+    ttk.Button(
+        pattern_actions,
         text="Save",
         command=callbacks.save_pattern,
-        width=8,
-    ).grid(row=1, column=2, padx=5)
-    tk.Button(
-        control_frame,
-        text="Load File",
+    ).pack(side=tk.LEFT, expand=True, fill=tk.X, padx=(0, 4))
+    ttk.Button(
+        pattern_actions,
+        text="Load",
         command=callbacks.load_saved_pattern,
-        width=10,
-    ).grid(row=1, column=3, padx=5)
-
+    ).pack(side=tk.LEFT, expand=True, fill=tk.X)
     if show_export:
-        tk.Button(
-            control_frame,
+        ttk.Button(
+            mode_frame,
             text="Export PNG",
             command=callbacks.export_png,
-            width=12,
-        ).grid(row=1, column=4, padx=5, columnspan=2)
+        ).pack(fill=tk.X, pady=(6, 0))
 
-    # Row 2: Custom rules (enabled for Custom mode)
-    tk.Label(control_frame, text="Custom B/S:").grid(
-        row=2, column=0, padx=5, sticky=tk.E
+    # Simulation controls
+    sim_frame = ttk.Labelframe(
+        sidebar,
+        text="Simulation",
+        style="Card.TLabelframe",
     )
-    tk.Label(control_frame, text="B:").grid(row=2, column=1, sticky=tk.W)
-    birth_entry = tk.Entry(control_frame, width=8)
-    birth_entry.grid(row=2, column=1, padx=(20, 5), sticky=tk.W)
-    tk.Label(control_frame, text="S:").grid(row=2, column=2, sticky=tk.W)
-    survival_entry = tk.Entry(control_frame, width=8)
-    survival_entry.grid(row=2, column=2, padx=(20, 5), sticky=tk.W)
-    apply_rules_button = tk.Button(
-        control_frame,
-        text="Apply Rules",
-        command=callbacks.apply_custom_rules,
-        width=12,
-    )
-    apply_rules_button.grid(row=2, column=3, padx=5)
+    sim_frame.pack(fill=tk.X, pady=(0, 10))
 
-    # Row 3: Grid size controls
-    tk.Label(control_frame, text="Grid Size:").grid(
-        row=3, column=0, padx=5, sticky=tk.E
-    )
-    size_combo = ttk.Combobox(
-        control_frame,
-        textvariable=variables.grid_size,
-        state="readonly",
-        width=12,
-        values=["50x50", "100x100", "150x150", "200x200", "Custom"],
-    )
-    size_combo.grid(row=3, column=1, padx=5, sticky=tk.W)
-    size_combo.bind("<<ComboboxSelected>>", callbacks.size_preset_changed)
+    sim_toolbar = ttk.Frame(sim_frame)
+    sim_toolbar.pack(fill=tk.X)
 
-    tk.Label(control_frame, text="W:").grid(row=3, column=2, sticky=tk.W)
-    tk.Spinbox(
-        control_frame,
-        from_=10,
-        to=500,
-        textvariable=variables.custom_width,
-        width=6,
-    ).grid(row=3, column=2, padx=(20, 2), sticky=tk.W)
-    tk.Label(control_frame, text="H:").grid(row=3, column=3, sticky=tk.W)
-    tk.Spinbox(
-        control_frame,
-        from_=10,
-        to=500,
-        textvariable=variables.custom_height,
-        width=6,
-    ).grid(row=3, column=3, padx=(20, 2), sticky=tk.W)
-    tk.Button(
-        control_frame,
-        text="Apply",
-        command=callbacks.apply_custom_size,
-        width=8,
-    ).grid(row=3, column=4, padx=5)
-
-    # Row 4: Drawing tools
-    tk.Label(control_frame, text="Draw:").grid(
-        row=4,
-        column=0,
-        padx=5,
-        sticky=tk.E,
+    start_button = tk.Button(
+        sim_toolbar,
+        text="Start",
+        command=lambda: None,  # replaced by caller
+        width=9,
+        bg="#4caf50",
+        fg="white",
+        relief=tk.FLAT,
     )
-    tk.Radiobutton(
-        control_frame,
-        text="Toggle",
-        variable=variables.draw_mode,
-        value="toggle",
-    ).grid(row=4, column=1, sticky=tk.W)
-    tk.Radiobutton(
-        control_frame,
-        text="Pen",
-        variable=variables.draw_mode,
-        value="pen",
-    ).grid(row=4, column=2, sticky=tk.W)
-    tk.Radiobutton(
-        control_frame,
-        text="Eraser",
-        variable=variables.draw_mode,
-        value="eraser",
-    ).grid(row=4, column=3, sticky=tk.W)
+    start_button.pack(side=tk.LEFT, padx=(0, 6))
 
-    tk.Label(control_frame, text="Symmetry:").grid(
-        row=4,
-        column=4,
-        sticky=tk.E,
-    )
-    ttk.Combobox(
-        control_frame,
-        textvariable=variables.symmetry,
-        state="readonly",
-        width=12,
-        values=["None", "Horizontal", "Vertical", "Both", "Radial"],
-    ).grid(row=4, column=5, padx=5)
+    ttk.Button(
+        sim_toolbar,
+        text="Step",
+        command=callbacks.step_once,
+        width=7,
+    ).pack(side=tk.LEFT)
+    ttk.Button(
+        sim_toolbar,
+        text="Clear",
+        command=callbacks.clear_grid,
+        width=7,
+    ).pack(side=tk.LEFT, padx=(6, 0))
+    ttk.Button(
+        sim_toolbar,
+        text="Reset",
+        command=callbacks.reset_simulation,
+        width=7,
+    ).pack(side=tk.LEFT, padx=(6, 0))
 
-    # Row 5: Speed and generation
-    tk.Label(control_frame, text="Speed:").grid(
-        row=5,
-        column=0,
-        padx=5,
-        sticky=tk.E,
-    )
+    ttk.Label(sim_frame, text="Speed").pack(anchor=tk.W, pady=(8, 2))
     tk.Scale(
-        control_frame,
+        sim_frame,
         from_=1,
         to=100,
         orient=tk.HORIZONTAL,
         variable=variables.speed,
-        length=150,
-    ).grid(row=5, column=1, columnspan=2, sticky=tk.W, padx=5)
+        length=200,
+        showvalue=False,
+    ).pack(fill=tk.X)
 
-    tk.Button(
-        control_frame,
+    ttk.Button(
+        sim_frame,
         text="Toggle Grid",
         command=callbacks.toggle_grid,
-        width=12,
-    ).grid(row=5, column=3, padx=5)
+    ).pack(fill=tk.X, pady=(8, 0))
 
-    gen_label = tk.Label(
-        control_frame,
+    gen_label = ttk.Label(
+        sim_frame,
         text="Generation: 0",
         font=("Arial", 10, "bold"),
     )
-    gen_label.grid(row=5, column=4, columnspan=2, padx=5)
+    gen_label.pack(anchor=tk.W, pady=(8, 0))
 
-    stats_frame = tk.Frame(control_frame)
-    stats_frame.grid(row=6, column=0, columnspan=6, sticky=tk.W, pady=(8, 0))
-    population_label = tk.Label(
+    stats_frame = ttk.Labelframe(
+        sidebar,
+        text="Population",
+        style="Card.TLabelframe",
+    )
+    stats_frame.pack(fill=tk.X, pady=(0, 10))
+    population_label = ttk.Label(
         stats_frame,
         text="Live: 0 | Δ: +0 | Peak: 0 | Density: 0.0%",
+        wraplength=220,
+        justify=tk.LEFT,
     )
-    population_label.pack(side=tk.LEFT)
+    population_label.pack(anchor=tk.W)
 
-    # Canvas + scrollbars
-    canvas_frame = tk.Frame(root)
-    canvas_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True, padx=10, pady=10)
+    # Custom rules
+    rules_frame = ttk.Labelframe(
+        sidebar,
+        text="Custom Rules",
+        style="Card.TLabelframe",
+    )
+    rules_frame.pack(fill=tk.X, pady=(0, 10))
+
+    rule_row = ttk.Frame(rules_frame)
+    rule_row.pack(fill=tk.X)
+    ttk.Label(rule_row, text="B").pack(side=tk.LEFT)
+    birth_entry = ttk.Entry(rule_row, width=8)
+    birth_entry.pack(side=tk.LEFT, padx=(4, 12))
+    ttk.Label(rule_row, text="S").pack(side=tk.LEFT)
+    survival_entry = ttk.Entry(rule_row, width=8)
+    survival_entry.pack(side=tk.LEFT, padx=(4, 0))
+
+    apply_rules_button = ttk.Button(
+        rules_frame,
+        text="Apply",
+        command=callbacks.apply_custom_rules,
+    )
+    apply_rules_button.pack(fill=tk.X, pady=(6, 0))
+
+    # Grid sizing
+    grid_frame = ttk.Labelframe(
+        sidebar,
+        text="Grid",
+        style="Card.TLabelframe",
+    )
+    grid_frame.pack(fill=tk.X, pady=(0, 10))
+
+    ttk.Label(grid_frame, text="Preset").pack(anchor=tk.W)
+    size_combo = ttk.Combobox(
+        grid_frame,
+        textvariable=variables.grid_size,
+        state="readonly",
+        values=["50x50", "100x100", "150x150", "200x200", "Custom"],
+    )
+    size_combo.pack(fill=tk.X, pady=(2, 6))
+    size_combo.bind("<<ComboboxSelected>>", callbacks.size_preset_changed)
+
+    custom_row = ttk.Frame(grid_frame)
+    custom_row.pack(fill=tk.X)
+    ttk.Label(custom_row, text="W").pack(side=tk.LEFT)
+    tk.Spinbox(
+        custom_row,
+        from_=10,
+        to=500,
+        textvariable=variables.custom_width,
+        width=5,
+    ).pack(side=tk.LEFT, padx=(4, 12))
+    ttk.Label(custom_row, text="H").pack(side=tk.LEFT)
+    tk.Spinbox(
+        custom_row,
+        from_=10,
+        to=500,
+        textvariable=variables.custom_height,
+        width=5,
+    ).pack(side=tk.LEFT, padx=(4, 0))
+
+    ttk.Button(
+        grid_frame,
+        text="Apply",
+        command=callbacks.apply_custom_size,
+    ).pack(fill=tk.X, pady=(6, 0))
+
+    # Drawing controls
+    draw_frame = ttk.Labelframe(
+        sidebar,
+        text="Drawing",
+        style="Card.TLabelframe",
+    )
+    draw_frame.pack(fill=tk.X)
+
+    ttk.Label(draw_frame, text="Tool").pack(anchor=tk.W)
+    tools_row = ttk.Frame(draw_frame)
+    tools_row.pack(anchor=tk.W, pady=(2, 6))
+    ttk.Radiobutton(
+        tools_row,
+        text="Toggle",
+        variable=variables.draw_mode,
+        value="toggle",
+    ).pack(side=tk.LEFT)
+    ttk.Radiobutton(
+        tools_row,
+        text="Pen",
+        variable=variables.draw_mode,
+        value="pen",
+    ).pack(side=tk.LEFT, padx=(8, 0))
+    ttk.Radiobutton(
+        tools_row,
+        text="Eraser",
+        variable=variables.draw_mode,
+        value="eraser",
+    ).pack(side=tk.LEFT, padx=(8, 0))
+
+    ttk.Label(draw_frame, text="Symmetry").pack(anchor=tk.W)
+    ttk.Combobox(
+        draw_frame,
+        textvariable=variables.symmetry,
+        state="readonly",
+        values=["None", "Horizontal", "Vertical", "Both", "Radial"],
+    ).pack(fill=tk.X, pady=(2, 0))
+
+    # Canvas area
+    canvas_frame = ttk.Frame(content)
+    canvas_frame.grid(row=0, column=0, sticky="nsew")
+
     canvas = tk.Canvas(
         canvas_frame,
         bg="white",
         width=DEFAULT_CANVAS_WIDTH,
         height=DEFAULT_CANVAS_HEIGHT,
+        highlightthickness=1,
+        highlightbackground="#cccccc",
     )
-    h_scroll = tk.Scrollbar(
+    h_scroll = ttk.Scrollbar(
         canvas_frame,
         orient=tk.HORIZONTAL,
         command=canvas.xview,
     )
-    v_scroll = tk.Scrollbar(
+    v_scroll = ttk.Scrollbar(
         canvas_frame,
         orient=tk.VERTICAL,
         command=canvas.yview,
     )
     canvas.configure(xscrollcommand=h_scroll.set, yscrollcommand=v_scroll.set)
     canvas.grid(row=0, column=0, sticky=tk.NSEW)
-    h_scroll.grid(row=1, column=0, sticky=tk.EW)
-    v_scroll.grid(row=0, column=1, sticky=tk.NS)
+    h_scroll.grid(row=1, column=0, sticky=tk.EW, pady=(4, 0))
+    v_scroll.grid(row=0, column=1, sticky=tk.NS, padx=(4, 0))
+
     canvas_frame.rowconfigure(0, weight=1)
     canvas_frame.columnconfigure(0, weight=1)
 
