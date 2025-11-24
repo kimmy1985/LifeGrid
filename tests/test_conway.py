@@ -1,13 +1,9 @@
-"""Tests for Conway's Game of Life automaton"""
+"""Tests for Conway's Game of Life automaton."""
 
-import sys
-import os
+# pylint: disable=import-error
+
 import numpy as np
 
-# Add src directory to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
-
-# Import from the monolithic main.py
 from main import ConwayGameOfLife
 
 
