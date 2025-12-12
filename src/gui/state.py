@@ -28,6 +28,9 @@ class SimulationState:
     population_history: Deque[int] = field(
         default_factory=lambda: deque(maxlen=MAX_HISTORY_LENGTH)
     )
+    grid_history: Deque[np.ndarray] = field(
+        default_factory=lambda: deque(maxlen=MAX_HISTORY_LENGTH)
+    )
     population_peak: int = 0
     entropy_history: Deque[float] = field(
         default_factory=lambda: deque(maxlen=MAX_HISTORY_LENGTH)
@@ -42,6 +45,20 @@ class SimulationState:
 
     def reset_generation(self) -> None:
         """Reset generation counters and population history."""
+
+        self.generation = 0
+        self.population_history.clear()
+        self.population_peak = 0
+        self.entropy_history.clear()
+        self.complexity_history.clear()
+        self.metrics_log.clear()
+        self.seen_hashes.clear()
+        self.cycle_period = None
+        self.cycle_first_seen = None
+        self.grid_history.clear()
+
+    def reset_metrics(self) -> None:
+        """Reset metrics while keeping grid history intact."""
 
         self.generation = 0
         self.population_history.clear()
@@ -113,6 +130,16 @@ class SimulationState:
         if self.cycle_period:
             parts.append(f"Cycle: {self.cycle_period}")
         return " | ".join(parts)
+
+    def rebuild_stats_from_history(self) -> None:
+        """Recompute metrics based on the stored grid history."""
+
+        grids = list(self.grid_history)
+        self.reset_metrics()
+        # Restore generation count and metrics from snapshots
+        for idx, grid in enumerate(grids):
+            self.generation = idx
+            self.update_population_stats(grid)
 
     def _calculate_complexity(self, grid: np.ndarray) -> int:
         """Calculate the number of unique 3x3 patterns in the grid."""

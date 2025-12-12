@@ -73,6 +73,7 @@ class Widgets:
 
     start_button: tk.Widget
     pattern_combo: ttk.Combobox
+    pattern_help: ttk.Label
     birth_entry: tk.Entry
     survival_entry: tk.Entry
     apply_rules_button: tk.Widget
@@ -90,6 +91,7 @@ class Callbacks:
 
     switch_mode: Callable[[str], None]
     step_once: Callable[[], None]
+    step_back: Callable[[], None]
     clear_grid: Callable[[], None]
     reset_simulation: Callable[[], None]
     load_pattern: Callable[[], None]
