@@ -6,7 +6,7 @@ import csv
 import json
 
 import tkinter as tk
-from tkinter import filedialog, messagebox
+from tkinter import filedialog, messagebox, ttk
 
 import numpy as np
 
@@ -18,6 +18,9 @@ from .config import (
     DEFAULT_CUSTOM_BIRTH,
     DEFAULT_CUSTOM_SURVIVAL,
     DEFAULT_SPEED,
+    DEFAULT_CELL_SIZE,
+    MIN_CELL_SIZE,
+    MAX_CELL_SIZE,
     EXPORT_COLOR_MAP,
     MAX_GRID_SIZE,
     MIN_GRID_SIZE,
@@ -58,37 +61,33 @@ class AutomatonApp:
         self.state = SimulationState()
         self.custom_birth = set(DEFAULT_CUSTOM_BIRTH)
         self.custom_survival = set(DEFAULT_CUSTOM_SURVIVAL)
+        self.custom_birth_text = "".join(
+            str(n) for n in sorted(self.custom_birth)
+        )
+        self.custom_survival_text = "".join(
+            str(n) for n in sorted(self.custom_survival)
+        )
+        self._load_custom_rules_from_settings()
 
         self.tk_vars: TkVars = self._create_variables()
+        self.state.cell_size = self.tk_vars.cell_size.get()
         callbacks = Callbacks(
             switch_mode=self.switch_mode,
             step_once=self.step_once,
             step_back=self.step_back,
-            clear_grid=self.clear_grid,
-            reset_simulation=self.reset_simulation,
             load_pattern=self.load_pattern_handler,
-            save_pattern=self.save_pattern,
-            load_saved_pattern=self.load_saved_pattern,
-            export_png=self.export_png,
-            export_metrics=self.export_metrics,
-            apply_custom_rules=self.apply_custom_rules,
-            size_preset_changed=self.on_size_preset_change,
-            apply_custom_size=self.apply_custom_grid_size,
             toggle_grid=self.toggle_grid,
             on_canvas_click=self.on_canvas_click,
             on_canvas_drag=self.on_canvas_drag,
-
         )
         self.widgets: Widgets = build_ui(
             root=self.root,
             variables=self.tk_vars,
             callbacks=callbacks,
-            show_export=PIL_AVAILABLE,
         )
         self.widgets.start_button.configure(  # type: ignore[call-arg]
             command=self.toggle_simulation
         )
-        self._widgets_init_defaults()
 
         self.state.show_grid = self.settings.get("show_grid", True)
 
@@ -100,17 +99,17 @@ class AutomatonApp:
         # Save settings on exit
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
 
-        # Bind About menu
-        self._install_about_menu()
+        # Menubar
+        self._install_menubar()
 
     def _on_close(self) -> None:
         """Save settings and close the application."""
         self._save_settings()
         self.root.destroy()
 
-    def _install_about_menu(self) -> None:
-        """Install Help/About handler on the menubar."""
-        # Build a simple About dialog via messagebox
+    def _install_menubar(self) -> None:
+        """Install the main application menubar."""
+
         def show_about() -> None:
             message = (
                 f"LifeGrid v{LIFEGRID_VERSION}\n\n"
@@ -119,27 +118,283 @@ class AutomatonApp:
             )
             messagebox.showinfo("About LifeGrid", message)
 
-        # Safely add menu command if a menubar exists
-        try:
-            menu = self.root.nametowidget(
-                self.root["menu"]  # type: ignore[index]
+        def show_shortcuts() -> None:
+            message = (
+                "Keyboard shortcuts:\n\n"
+                "Space  — Start/Stop\n"
+                "S      — Step\n"
+                "Left   — Step Back\n"
+                "C      — Clear\n"
+                "G      — Toggle grid\n"
             )
-        except (KeyError, tk.TclError):
-            menu = None
-        if not menu:
-            # Create a menubar and add Help/About
-            menubar = tk.Menu(self.root)
-            help_menu = tk.Menu(menubar, tearoff=0)
-            help_menu.add_command(label="About LifeGrid", command=show_about)
-            menubar.add_cascade(label="Help", menu=help_menu)
-            self.root.config(menu=menubar)
+            messagebox.showinfo("Shortcuts", message)
+
+        menubar = tk.Menu(self.root)
+
+        file_menu = tk.Menu(menubar, tearoff=0)
+        file_menu.add_command(label="Save Pattern…", command=self.save_pattern)
+        file_menu.add_command(
+            label="Load Pattern…",
+            command=self.load_saved_pattern,
+        )
+        file_menu.add_separator()
+        file_menu.add_command(
+            label="Export Metrics (CSV)…",
+            command=self.export_metrics,
+        )
+        if PIL_AVAILABLE:
+            file_menu.add_command(label="Export PNG…", command=self.export_png)
         else:
-            # Try to find Help menu
-            menubar = tk.Menu(self.root)
-            help_menu = tk.Menu(menubar, tearoff=0)
-            help_menu.add_command(label="About LifeGrid", command=show_about)
-            menubar.add_cascade(label="Help", menu=help_menu)
-            self.root.config(menu=menubar)
+            file_menu.add_command(label="Export PNG…", state="disabled")
+        file_menu.add_separator()
+        file_menu.add_command(label="Exit", command=self._on_close)
+        menubar.add_cascade(label="File", menu=file_menu)
+
+        sim_menu = tk.Menu(menubar, tearoff=0)
+        # Keep vital play/step controls in the sidebar to avoid redundancy.
+        sim_menu.add_command(label="Reset", command=self.reset_simulation)
+        sim_menu.add_command(label="Clear", command=self.clear_grid)
+        menubar.add_cascade(label="Simulation", menu=sim_menu)
+
+        settings_menu = tk.Menu(menubar, tearoff=0)
+        settings_menu.add_command(
+            label="Grid & View Settings…",
+            command=self.open_simulation_settings,
+        )
+        settings_menu.add_separator()
+        settings_menu.add_command(
+            label="Custom Rules…",
+            command=self.open_custom_rules_dialog,
+        )
+        presets_menu = tk.Menu(settings_menu, tearoff=0)
+        presets_menu.add_command(
+            label="Conway (B3/S23)",
+            command=lambda: self.apply_rule_preset("3", "23"),
+        )
+        presets_menu.add_command(
+            label="HighLife (B36/S23)",
+            command=lambda: self.apply_rule_preset("36", "23"),
+        )
+        presets_menu.add_command(
+            label="Seeds (B2/S∅)",
+            command=lambda: self.apply_rule_preset("2", ""),
+        )
+        presets_menu.add_command(
+            label="Life (B3/S0123456789)",
+            command=lambda: self.apply_rule_preset("3", "0123456789"),
+        )
+        settings_menu.add_cascade(label="Rule Presets", menu=presets_menu)
+        settings_menu.add_separator()
+        settings_menu.add_command(
+            label="Toggle Grid",
+            command=self.toggle_grid,
+        )
+        menubar.add_cascade(label="Settings", menu=settings_menu)
+
+        help_menu = tk.Menu(menubar, tearoff=0)
+        help_menu.add_command(label="Shortcuts", command=show_shortcuts)
+        help_menu.add_command(label="About LifeGrid", command=show_about)
+        menubar.add_cascade(label="Help", menu=help_menu)
+
+        self.root.config(menu=menubar)
+
+    def apply_rule_preset(self, birth: str, survival: str) -> None:
+        """Apply a preset by switching to Custom Rules and applying B/S."""
+
+        if self.tk_vars.mode.get() != "Custom Rules":
+            self.tk_vars.mode.set("Custom Rules")
+            self.switch_mode("Custom Rules")
+
+        self.custom_birth_text = birth.strip()
+        self.custom_survival_text = survival.strip()
+        self.apply_custom_rules(
+            birth_text=self.custom_birth_text,
+            survival_text=self.custom_survival_text,
+        )
+
+    def open_custom_rules_dialog(self) -> None:
+        """Open a dialog to edit and apply custom life-like B/S rules."""
+
+        dialog = tk.Toplevel(self.root)
+        dialog.title("Custom Rules")
+        dialog.transient(self.root)
+        dialog.grab_set()
+
+        container = ttk.Frame(dialog, padding=12)
+        container.grid(row=0, column=0, sticky="nsew")
+        dialog.rowconfigure(0, weight=1)
+        dialog.columnconfigure(0, weight=1)
+
+        ttk.Label(container, text="Birth (B)").grid(
+            row=0,
+            column=0,
+            sticky="w",
+        )
+        birth_var = tk.StringVar(value=self.custom_birth_text)
+        birth_entry = ttk.Entry(container, textvariable=birth_var, width=20)
+        birth_entry.grid(row=1, column=0, sticky="ew", pady=(2, 10))
+
+        ttk.Label(container, text="Survival (S)").grid(
+            row=2,
+            column=0,
+            sticky="w",
+        )
+        survival_var = tk.StringVar(value=self.custom_survival_text)
+        survival_entry = ttk.Entry(
+            container,
+            textvariable=survival_var,
+            width=20,
+        )
+        survival_entry.grid(row=3, column=0, sticky="ew", pady=(2, 10))
+
+        hint = (
+            "Use digits 0-8. Examples:\n"
+            "Conway: B3 / S23\n"
+            "HighLife: B36 / S23\n"
+            "Seeds: B2 / S∅"
+        )
+        ttk.Label(container, text=hint, justify=tk.LEFT).grid(
+            row=4,
+            column=0,
+            sticky="w",
+            pady=(0, 12),
+        )
+
+        buttons = ttk.Frame(container)
+        buttons.grid(row=5, column=0, sticky="e")
+
+        def apply_from_dialog() -> None:
+            if self.tk_vars.mode.get() != "Custom Rules":
+                self.tk_vars.mode.set("Custom Rules")
+                self.switch_mode("Custom Rules")
+            self.custom_birth_text = birth_var.get().strip()
+            self.custom_survival_text = survival_var.get().strip()
+            self.apply_custom_rules(
+                birth_text=self.custom_birth_text,
+                survival_text=self.custom_survival_text,
+            )
+
+        apply_btn = ttk.Button(
+            buttons,
+            text="Apply",
+            command=apply_from_dialog,
+        )
+        apply_btn.grid(row=0, column=0, padx=(0, 8))
+        close_btn = ttk.Button(buttons, text="Close", command=dialog.destroy)
+        close_btn.grid(row=0, column=1)
+
+        container.columnconfigure(0, weight=1)
+        dialog.bind("<Escape>", lambda _e: dialog.destroy())
+        birth_entry.focus_set()
+
+    def open_simulation_settings(self) -> None:
+        """Open a small dialog to adjust simulation parameters."""
+
+        dialog = tk.Toplevel(self.root)
+        dialog.title("Grid & View Settings")
+        dialog.transient(self.root)
+        dialog.grab_set()
+
+        container = ttk.Frame(dialog, padding=12)
+        container.grid(row=0, column=0, sticky="nsew")
+        dialog.rowconfigure(0, weight=1)
+        dialog.columnconfigure(0, weight=1)
+
+        # Mode/pattern, speed, and drawing controls live in the sidebar.
+        grid_size_var = tk.StringVar(value=self.tk_vars.grid_size.get())
+        custom_w_var = tk.IntVar(value=self.tk_vars.custom_width.get())
+        custom_h_var = tk.IntVar(value=self.tk_vars.custom_height.get())
+        cell_size_var = tk.IntVar(value=self.tk_vars.cell_size.get())
+        show_grid_var = tk.BooleanVar(value=bool(self.state.show_grid))
+
+        # Grid
+        ttk.Label(container, text="Grid Preset").grid(
+            row=0,
+            column=0,
+            sticky="w",
+        )
+        grid_combo = ttk.Combobox(
+            container,
+            textvariable=grid_size_var,
+            state="readonly",
+            values=["50x50", "100x100", "150x150", "200x200", "Custom"],
+            width=16,
+        )
+        grid_combo.grid(row=1, column=0, sticky="w", pady=(2, 6))
+
+        grid_dims = ttk.Frame(container)
+        grid_dims.grid(row=2, column=0, sticky="w", pady=(0, 10))
+        ttk.Label(grid_dims, text="W").grid(row=0, column=0, sticky="w")
+        w_spin = tk.Spinbox(
+            grid_dims,
+            from_=MIN_GRID_SIZE,
+            to=MAX_GRID_SIZE,
+            textvariable=custom_w_var,
+            width=6,
+        )
+        w_spin.grid(row=0, column=1, sticky="w", padx=(4, 10))
+        ttk.Label(grid_dims, text="H").grid(row=0, column=2, sticky="w")
+        h_spin = tk.Spinbox(
+            grid_dims,
+            from_=MIN_GRID_SIZE,
+            to=MAX_GRID_SIZE,
+            textvariable=custom_h_var,
+            width=6,
+        )
+        h_spin.grid(row=0, column=3, sticky="w", padx=(4, 0))
+
+        # Cell size
+        ttk.Label(container, text="Cell Size").grid(
+            row=3,
+            column=0,
+            sticky="w",
+        )
+        cell_spin = tk.Spinbox(
+            container,
+            from_=MIN_CELL_SIZE,
+            to=MAX_CELL_SIZE,
+            textvariable=cell_size_var,
+            width=6,
+        )
+        cell_spin.grid(row=4, column=0, sticky="w", pady=(2, 10))
+
+        show_grid_check = ttk.Checkbutton(
+            container,
+            text="Show Grid Lines",
+            variable=show_grid_var,
+        )
+        show_grid_check.grid(row=5, column=0, sticky="w", pady=(0, 12))
+
+        buttons = ttk.Frame(container)
+        buttons.grid(row=6, column=0, sticky="e")
+
+        def apply_settings() -> None:
+            # Grid preset/custom size
+            self.tk_vars.grid_size.set(grid_size_var.get())
+            self.tk_vars.custom_width.set(int(custom_w_var.get()))
+            self.tk_vars.custom_height.set(int(custom_h_var.get()))
+            if grid_size_var.get() == "Custom":
+                self.apply_custom_grid_size()
+            else:
+                self.on_size_preset_change(
+                    tk.Event()  # type: ignore[call-arg]
+                )
+
+            # Cell size
+            self.tk_vars.cell_size.set(int(cell_size_var.get()))
+            self.apply_cell_size()
+
+            # View
+            self.state.show_grid = bool(show_grid_var.get())
+            self._update_display()
+
+        apply_btn = ttk.Button(buttons, text="Apply", command=apply_settings)
+        apply_btn.grid(row=0, column=0, padx=(0, 8))
+        close_btn = ttk.Button(buttons, text="Close", command=dialog.destroy)
+        close_btn.grid(row=0, column=1)
+
+        container.columnconfigure(0, weight=1)
+        dialog.bind("<Escape>", lambda _e: dialog.destroy())
 
     # ------------------------------------------------------------------
     # Variable and widget helpers
@@ -161,9 +416,12 @@ class AutomatonApp:
             "grid_size": self.tk_vars.grid_size.get(),
             "custom_width": self.tk_vars.custom_width.get(),
             "custom_height": self.tk_vars.custom_height.get(),
+            "cell_size": self.tk_vars.cell_size.get(),
             "draw_mode": self.tk_vars.draw_mode.get(),
             "symmetry": self.tk_vars.symmetry.get(),
             "show_grid": self.state.show_grid,
+            "custom_birth": self.custom_birth_text,
+            "custom_survival": self.custom_survival_text,
         }
         try:
             with open(self.settings_file, "w", encoding="utf-8") as f:
@@ -174,17 +432,25 @@ class AutomatonApp:
     def _create_variables(self) -> TkVars:
         settings = self.settings
 
-        # Ensure we always start from a valid, non-custom default on cold start.
+        # Ensure we always start from a valid default on cold start.
         default_mode = "Conway's Game of Life"
         default_pattern = "Classic Mix"
 
         requested_mode = settings.get("mode", default_mode)
         valid_modes = set(MODE_FACTORIES.keys()) | {"Custom Rules"}
-        mode = requested_mode if requested_mode in valid_modes else default_mode
+        mode = (
+            requested_mode
+            if requested_mode in valid_modes
+            else default_mode
+        )
 
         available_patterns = MODE_PATTERNS.get(mode, ["Empty"])
         requested_pattern = settings.get("pattern", default_pattern)
-        pattern = requested_pattern if requested_pattern in available_patterns else available_patterns[0]
+        pattern = (
+            requested_pattern
+            if requested_pattern in available_patterns
+            else available_patterns[0]
+        )
 
         return TkVars(
             mode=tk.StringVar(value=mode),
@@ -193,22 +459,49 @@ class AutomatonApp:
             grid_size=tk.StringVar(value=settings.get("grid_size", "100x100")),
             custom_width=tk.IntVar(value=settings.get("custom_width", 100)),
             custom_height=tk.IntVar(value=settings.get("custom_height", 100)),
+            cell_size=tk.IntVar(
+                value=settings.get("cell_size", DEFAULT_CELL_SIZE)
+            ),
             draw_mode=tk.StringVar(value=settings.get("draw_mode", "toggle")),
             symmetry=tk.StringVar(value=settings.get("symmetry", "None")),
         )
 
-    def _widgets_init_defaults(self) -> None:
-        birth_values = "".join(str(n) for n in sorted(self.custom_birth))
-        survival_values = "".join(str(n) for n in sorted(self.custom_survival))
-        self.widgets.birth_entry.insert(0, birth_values)
-        self.widgets.survival_entry.insert(0, survival_values)
+    def _load_custom_rules_from_settings(self) -> None:
+        """Load custom B/S rule strings from settings if present."""
+
+        birth = self.settings.get("custom_birth")
+        survival = self.settings.get("custom_survival")
+        if isinstance(birth, str):
+            self.custom_birth_text = birth.strip()
+        if isinstance(survival, str):
+            self.custom_survival_text = survival.strip()
+
+        # Try to prime the rule sets as well.
+        try:
+            self.custom_birth = {
+                int(ch) for ch in self.custom_birth_text if ch.isdigit()
+            }
+            self.custom_survival = {
+                int(ch) for ch in self.custom_survival_text if ch.isdigit()
+            }
+        except ValueError:
+            self.custom_birth = set(DEFAULT_CUSTOM_BIRTH)
+            self.custom_survival = set(DEFAULT_CUSTOM_SURVIVAL)
+            self.custom_birth_text = "".join(
+                str(n) for n in sorted(self.custom_birth)
+            )
+            self.custom_survival_text = "".join(
+                str(n) for n in sorted(self.custom_survival)
+            )
 
     def _snapshot_grid(self) -> None:
         """Store a copy of the current grid for backward stepping."""
 
         automaton = self.state.current_automaton
         if automaton and hasattr(automaton, "grid"):
-            self.state.grid_history.append(np.copy(automaton.grid))  # type: ignore[attr-defined]
+            self.state.grid_history.append(
+                np.copy(automaton.grid)  # type: ignore[attr-defined]
+            )
 
     def _reset_history_with_current_grid(self) -> None:
         """Clear history and seed it with the current grid."""
@@ -237,14 +530,8 @@ class AutomatonApp:
         self.root.bind("<Key-G>", lambda _event: self.toggle_grid())
 
     def _update_widgets_enabled_state(self) -> None:
-        is_custom = self.tk_vars.mode.get() == "Custom Rules"
-        state = tk.NORMAL if is_custom else tk.DISABLED
-        for widget in (
-            self.widgets.birth_entry,
-            self.widgets.survival_entry,
-            self.widgets.apply_rules_button,
-        ):
-            widget.configure(state=state)  # type: ignore[call-arg]
+        # Custom-rules controls are now in the Settings menu.
+        return
 
     # ------------------------------------------------------------------
     # Automaton control
@@ -282,25 +569,12 @@ class AutomatonApp:
         if first_pattern != "Empty" and hasattr(automaton, "load_pattern"):
             automaton.load_pattern(first_pattern)  # type: ignore[attr-defined]
 
-        if mode_name == "Custom Rules":
-            self._sync_custom_entries()
-
         self.state.reset_generation()
         self._reset_history_with_current_grid()
         self._update_generation_label()
         self._update_widgets_enabled_state()
         self._update_display()
         self._update_pattern_description()
-
-    def _sync_custom_entries(self) -> None:
-        """Mirror the active custom rule sets into the entry widgets."""
-
-        birth_values = "".join(str(n) for n in sorted(self.custom_birth))
-        survival_values = "".join(str(n) for n in sorted(self.custom_survival))
-        self.widgets.birth_entry.delete(0, tk.END)
-        self.widgets.birth_entry.insert(0, birth_values)
-        self.widgets.survival_entry.delete(0, tk.END)
-        self.widgets.survival_entry.insert(0, survival_values)
 
     def load_pattern_handler(self) -> None:
         """Load the currently selected pattern into the simulation grid."""
@@ -337,7 +611,9 @@ class AutomatonApp:
         """Force the simulation into a stopped state."""
 
         self.state.running = False
-        self.widgets.start_button.config(text="Start")  # type: ignore[attr-defined]
+        self.widgets.start_button.config(  # type: ignore[attr-defined]
+            text="Start"
+        )
 
     def _run_simulation_loop(self) -> None:
         """Advance the automaton while the simulation is marked running."""
@@ -379,7 +655,9 @@ class AutomatonApp:
 
     def _update_generation_label(self) -> None:
         generation_text = f"Generation: {self.state.generation}"
-        self.widgets.gen_label.config(text=generation_text)  # type: ignore[attr-defined]
+        self.widgets.gen_label.config(  # type: ignore[attr-defined]
+            text=generation_text
+        )
 
     def reset_simulation(self) -> None:
         """Reset the automaton grid to its starting state."""
@@ -407,7 +685,12 @@ class AutomatonApp:
         self._update_generation_label()
         self._update_display()
 
-    def apply_custom_rules(self) -> None:
+    def apply_custom_rules(
+        self,
+        *,
+        birth_text: str | None = None,
+        survival_text: str | None = None,
+    ) -> None:
         """Apply custom birth/survival rule strings to the automaton."""
 
         automaton = self.state.current_automaton
@@ -418,8 +701,16 @@ class AutomatonApp:
             )
             return
 
-        birth_text = self.widgets.birth_entry.get().strip()
-        survival_text = self.widgets.survival_entry.get().strip()
+        birth_text = (
+            birth_text
+            if birth_text is not None
+            else self.custom_birth_text
+        ).strip()
+        survival_text = (
+            survival_text
+            if survival_text is not None
+            else self.custom_survival_text
+        ).strip()
 
         # Validate input
         if not birth_text and not survival_text:
@@ -453,6 +744,8 @@ class AutomatonApp:
 
         self.custom_birth = birth_set
         self.custom_survival = survival_set
+        self.custom_birth_text = birth_text
+        self.custom_survival_text = survival_text
         automaton.set_rules(self.custom_birth, self.custom_survival)
         automaton.reset()
         self.state.reset_generation()
@@ -461,8 +754,16 @@ class AutomatonApp:
         self._update_display()
 
         # Create user-friendly rule description
-        birth_str = "".join(str(n) for n in sorted(birth_set)) if birth_set else "∅"
-        survival_str = "".join(str(n) for n in sorted(survival_set)) if survival_set else "∅"
+        birth_str = (
+            "".join(str(n) for n in sorted(birth_set))
+            if birth_set
+            else "∅"
+        )
+        survival_str = (
+            "".join(str(n) for n in sorted(survival_set))
+            if survival_set
+            else "∅"
+        )
         rule_notation = f"B{birth_str}/S{survival_str}"
 
         messagebox.showinfo(
@@ -510,6 +811,15 @@ class AutomatonApp:
         self.state.grid_height = height
         self.state.current_automaton = None
         self.switch_mode(self.tk_vars.mode.get())
+
+    def apply_cell_size(self) -> None:
+        """Update the rendered cell size and redraw."""
+
+        size = self.tk_vars.cell_size.get()
+        size = max(MIN_CELL_SIZE, min(size, MAX_CELL_SIZE))
+        self.tk_vars.cell_size.set(size)
+        self.state.cell_size = size
+        self._update_display()
 
     # ------------------------------------------------------------------
     # Persistence
@@ -567,7 +877,11 @@ class AutomatonApp:
 
         # Validate required fields
         required_fields = ["mode", "width", "height", "grid"]
-        missing_fields = [field for field in required_fields if field not in data]
+        missing_fields = [
+            field
+            for field in required_fields
+            if field not in data
+        ]
         if missing_fields:
             messagebox.showerror(
                 "Invalid File",
@@ -588,10 +902,18 @@ class AutomatonApp:
             return
 
         # Validate dimensions
-        if width < 10 or width > MAX_GRID_SIZE or height < 10 or height > MAX_GRID_SIZE:
+        if (
+            width < 10
+            or width > MAX_GRID_SIZE
+            or height < 10
+            or height > MAX_GRID_SIZE
+        ):
             messagebox.showerror(
                 "Invalid Size",
-                f"Grid size must be between 10x10 and {MAX_GRID_SIZE}x{MAX_GRID_SIZE}",
+                (
+                    "Grid size must be between 10x10 and "
+                    f"{MAX_GRID_SIZE}x{MAX_GRID_SIZE}"
+                ),
             )
             return
 
@@ -621,8 +943,13 @@ class AutomatonApp:
                 survival_set = {int(value) for value in survival}
                 self.custom_birth = birth_set
                 self.custom_survival = survival_set
+                self.custom_birth_text = "".join(
+                    str(n) for n in sorted(self.custom_birth)
+                )
+                self.custom_survival_text = "".join(
+                    str(n) for n in sorted(self.custom_survival)
+                )
                 automaton.set_rules(birth_set, survival_set)
-                self._sync_custom_entries()
             except (ValueError, TypeError):
                 messagebox.showwarning(
                     "Invalid Rules",
@@ -633,12 +960,19 @@ class AutomatonApp:
             expected_shape = (
                 self.state.grid_height, self.state.grid_width
             )
-            if automaton is not None:
-                automaton.grid = grid_data.reshape(expected_shape)  # type: ignore[attr-defined]
+            if automaton is not None and hasattr(automaton, "grid"):
+                setattr(
+                    automaton,
+                    "grid",
+                    grid_data.reshape(expected_shape),
+                )
         except ValueError:
             messagebox.showwarning(
                 "Shape Mismatch",
-                "Saved grid size did not match current settings. Resetting grid.",
+                (
+                    "Saved grid size did not match current settings. "
+                    "Resetting grid."
+                ),
             )
             if automaton is not None:
                 automaton.reset()
@@ -670,10 +1004,19 @@ class AutomatonApp:
             "white",
         )
         pixels = image.load()
+        if pixels is None:
+            messagebox.showerror(
+                "Export Failed",
+                "Could not access PNG pixel buffer.",
+            )
+            return
         for y in range(self.state.grid_height):
             for x in range(self.state.grid_width):
                 value = int(grid[y, x])
-                pixels[x, y] = EXPORT_COLOR_MAP.get(value, (0, 0, 0))  # type: ignore[index]
+                pixels[x, y] = EXPORT_COLOR_MAP.get(
+                    value,
+                    (0, 0, 0),
+                )
         max_dimension = max(
             self.state.grid_width,
             self.state.grid_height,
@@ -706,9 +1049,9 @@ class AutomatonApp:
             self.state.show_grid,
         )
         stats = self.state.update_population_stats(grid)
-        self.widgets.population_label.config(text=stats)  # type: ignore[attr-defined]
-        self._update_population_chart()
-        self._update_cycle_label()
+        self.widgets.population_label.config(  # type: ignore[attr-defined]
+            text=stats
+        )
 
     def toggle_grid(self) -> None:
         """Toggle grid line visibility and refresh the canvas."""
@@ -769,72 +1112,13 @@ class AutomatonApp:
             ):
                 automaton.grid[py, px] = 0  # type: ignore[attr-defined]
 
-    # ------------------------------------------------------------------
-    # Metrics helpers
-    # ------------------------------------------------------------------
-    def _update_population_chart(self) -> None:
-        """Render a tiny time-series chart for population, entropy, complexity."""
-
-        canvas = self.widgets.population_canvas
-        state = self.state
-        history = list(state.population_history)
-        entropy = list(state.entropy_history)
-        complexity = list(state.complexity_history)
-        canvas.delete("all")
-        if not history:
-            return
-
-        width = int(canvas.winfo_width() or 240)
-        height = int(canvas.winfo_height() or 80)
-        padding = 4
-        # Normalize series to fit height
-
-        def normalize(series: list, default_max: float = 1.0) -> list[tuple[int, int]]:
-            if not series:
-                return []
-            max_val = max(series) or default_max
-            span = max_val if max_val else 1.0
-            points = []
-            for idx, val in enumerate(series[-width:]):
-                x_offset = idx / max(1, len(series[-width:]) - 1)
-                x = padding + int(x_offset * (width - 2 * padding))
-                y_val = (1 - (val / span)) * (height - 2 * padding)
-                y = padding + int(y_val)
-                points.append((x, y))
-            return points
-
-        pop_points = normalize(history)
-        ent_points = normalize(entropy)
-        comp_points = normalize(complexity, default_max=1.0)
-
-        series_colors = [
-            (pop_points, "#2a9d8f"),
-            (ent_points, "#f4a261"),
-            (comp_points, "#e76f51")
-        ]
-        for points, color in series_colors:
-            if len(points) >= 2:
-                canvas.create_line(
-                    points, fill=color, width=2, smooth=True
-                )
-
-    def _update_cycle_label(self) -> None:
-        """Refresh the cycle detection label."""
-
-        label = self.widgets.cycle_label
-        if self.state.cycle_period:
-            text = f"Cycle detected: {self.state.cycle_period} gens"
-            label.config(text=text, foreground="#1b5e20")  # type: ignore[attr-defined]
-        else:
-            label.config(text="Cycle: –", foreground="#555")  # type: ignore[attr-defined]
-
     def export_metrics(self) -> None:
         """Export per-generation metrics to CSV."""
 
         if not self.state.metrics_log:
             messagebox.showinfo(
                 "No Data",
-                "Run the simulation to collect metrics before exporting."
+                "Run the simulation to collect metrics before exporting.",
             )
             return
         filename = filedialog.asksaveasfilename(
@@ -845,8 +1129,13 @@ class AutomatonApp:
             return
 
         fieldnames = [
-            "generation", "live", "delta", "density",
-            "entropy", "complexity", "cycle_period"
+            "generation",
+            "live",
+            "delta",
+            "density",
+            "entropy",
+            "complexity",
+            "cycle_period",
         ]
         try:
             with open(filename, "w", encoding="utf-8", newline="") as handle:

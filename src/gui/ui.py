@@ -41,7 +41,9 @@ class Tooltip:
         )
         label.pack()
 
-    def hide_tooltip(self, event: tk.Event[tk.Misc]) -> None:  # pylint: disable=unused-argument
+    def hide_tooltip(
+        self, _event: tk.Event[tk.Misc]
+    ) -> None:  # pylint: disable=unused-argument
         """Hide the tooltip."""
         if self.tooltip_window:
             self.tooltip_window.destroy()
@@ -59,6 +61,7 @@ class TkVars:
     grid_size: tk.StringVar
     custom_width: tk.IntVar
     custom_height: tk.IntVar
+    cell_size: tk.IntVar
     draw_mode: tk.StringVar
     symmetry: tk.StringVar
 
@@ -74,13 +77,8 @@ class Widgets:
     start_button: tk.Widget
     pattern_combo: ttk.Combobox
     pattern_help: ttk.Label
-    birth_entry: tk.Entry
-    survival_entry: tk.Entry
-    apply_rules_button: tk.Widget
     gen_label: tk.Widget
     population_label: tk.Widget
-    population_canvas: tk.Canvas
-    cycle_label: tk.Widget
     canvas: tk.Canvas
 
 
@@ -92,16 +90,7 @@ class Callbacks:
     switch_mode: Callable[[str], None]
     step_once: Callable[[], None]
     step_back: Callable[[], None]
-    clear_grid: Callable[[], None]
-    reset_simulation: Callable[[], None]
     load_pattern: Callable[[], None]
-    save_pattern: Callable[[], None]
-    load_saved_pattern: Callable[[], None]
-    export_png: Callable[[], None]
-    export_metrics: Callable[[], None]
-    apply_custom_rules: Callable[[], None]
-    size_preset_changed: Callable[[tk.Event[tk.Misc]], None]
-    apply_custom_size: Callable[[], None]
     toggle_grid: Callable[[], None]
     on_canvas_click: Callable[[tk.Event[tk.Misc]], None]
     on_canvas_drag: Callable[[tk.Event[tk.Misc]], None]
@@ -111,11 +100,9 @@ def build_ui(
     root: tk.Tk,
     variables: TkVars,
     callbacks: Callbacks,
-    show_export: bool,
 ) -> Widgets:
     """Create the Tkinter widget layout and wire up callbacks."""
 
-    _add_menubar(root, callbacks)
     _configure_style(root)
     sidebar, content = _create_layout(root)
 
@@ -123,49 +110,42 @@ def build_ui(
         sidebar,
         variables,
         callbacks,
-        show_export,
     )
     start_button, gen_label = _add_simulation_section(
         sidebar,
         variables,
         callbacks,
     )
-    population_label, population_canvas, cycle_label = _add_population_section(sidebar, callbacks)
-    (
-        birth_entry,
-        survival_entry,
-        apply_rules_button,
-    ) = _add_custom_rules_section(sidebar, callbacks)
-    _add_grid_section(sidebar, variables, callbacks)
+    population_label = _add_population_section(sidebar)
     _add_drawing_section(sidebar, variables)
     canvas = _add_canvas_area(content, callbacks)
+
+    # Prevent resizing the window so small that the sidebar vanishes.
+    root.update_idletasks()
+    screen_w = root.winfo_screenwidth()
+    screen_h = root.winfo_screenheight()
+    req_w = min(root.winfo_reqwidth(), max(200, screen_w - 80))
+    req_h = min(root.winfo_reqheight(), max(200, screen_h - 120))
+    root.minsize(req_w, req_h)
 
     return Widgets(
         start_button=start_button,
         pattern_combo=pattern_combo,
         pattern_help=pattern_help,
-        birth_entry=birth_entry,
-        survival_entry=survival_entry,
-        apply_rules_button=apply_rules_button,
         gen_label=gen_label,
         population_label=population_label,
-        population_canvas=population_canvas,
-        cycle_label=cycle_label,
         canvas=canvas,
     )
 
 
-def _add_menubar(root: tk.Tk, callbacks: Callbacks) -> None:
+def _add_menubar(root: tk.Tk, _callbacks: Callbacks) -> None:
     """Add a basic menubar with Help/About."""
 
     menubar = tk.Menu(root)
     help_menu = tk.Menu(menubar, tearoff=0)
     help_menu.add_command(
         label="About LifeGrid",
-        command=lambda: (
-            None
-            if callbacks.toggle_grid() else None  # type: ignore[func-returns-value]
-        ),
+        command=lambda: None,
     )
     # Placeholder: actual About handler is implemented in app
     # here we call a dedicated method via callbacks if present
@@ -197,12 +177,19 @@ def _configure_style(root: tk.Tk) -> None:
         font=("Segoe UI", 10),
     )
     style.configure("TFrame", background=base_bg)
-    style.configure("Card.TFrame", background=card_bg, padding=10)
+    style.configure("Card.TFrame", background=card_bg, padding=8)
+    style.configure(
+        "Sidebar.TFrame",
+        background=card_bg,
+        padding=8,
+        borderwidth=1,
+        relief="solid",
+    )
     style.configure(
         "Card.TLabelframe",
         background=card_bg,
         relief="flat",
-        padding=10,
+        padding=8,
     )
     style.configure(
         "Card.TLabelframe.Label",
@@ -232,13 +219,25 @@ def _configure_style(root: tk.Tk) -> None:
 def _create_layout(root: tk.Tk) -> tuple[ttk.Frame, ttk.Frame]:
     """Create the shell layout and return the sidebar and content frames."""
 
+    root.rowconfigure(0, weight=1)
+    root.columnconfigure(0, weight=1)
+
     shell = ttk.Frame(root, padding=10)
-    shell.pack(fill=tk.BOTH, expand=True)
+    shell.grid(row=0, column=0, sticky="nsew")
+    shell.columnconfigure(0, weight=0, minsize=300)
     shell.columnconfigure(1, weight=1)
     shell.rowconfigure(0, weight=1)
 
-    sidebar = ttk.Frame(shell, style="Card.TFrame")
-    sidebar.grid(row=0, column=0, sticky="nsw", padx=(0, 10))
+    sidebar = ttk.Frame(
+        shell,
+        style="Sidebar.TFrame",
+        width=280,
+        padding=8,
+        borderwidth=1,
+        relief="solid",
+    )
+    sidebar.grid(row=0, column=0, sticky="nsew", padx=(0, 10))
+    sidebar.grid_propagate(False)  # keep a stable visible width
 
     content = ttk.Frame(shell)
     content.grid(row=0, column=1, sticky="nsew")
@@ -252,7 +251,6 @@ def _add_automaton_section(
     parent: ttk.Frame,
     variables: TkVars,
     callbacks: Callbacks,
-    show_export: bool,
 ) -> tuple[ttk.Combobox, ttk.Label]:
     """Build the automaton selection area and return pattern widgets."""
 
@@ -261,7 +259,7 @@ def _add_automaton_section(
         text="Automaton",
         style="Card.TLabelframe",
     )
-    mode_frame.pack(fill=tk.X, pady=(0, 10))
+    mode_frame.pack(fill=tk.X, pady=(0, 4))
 
     ttk.Label(mode_frame, text="Mode").pack(anchor=tk.W)
     mode_combo = ttk.Combobox(
@@ -293,28 +291,11 @@ def _add_automaton_section(
     pattern_help = ttk.Label(
         mode_frame,
         text="",
-        wraplength=320,
+        wraplength=220,
         style="Muted.TLabel",
         justify=tk.LEFT,
     )
-    pattern_help.pack(fill=tk.X, pady=(0, 6))
-
-    row = ttk.Frame(mode_frame)
-    row.pack(fill=tk.X, pady=(4, 0))
-    save_button = ttk.Button(row, text="Save", command=callbacks.save_pattern)
-    save_button.pack(side=tk.LEFT, expand=True, fill=tk.X, padx=(0, 4))
-    Tooltip(save_button, "Save the current grid as a JSON file")
-    load_button = ttk.Button(row, text="Load", command=callbacks.load_saved_pattern)
-    load_button.pack(side=tk.LEFT, expand=True, fill=tk.X)
-    Tooltip(load_button, "Load a pattern from a JSON file")
-    if show_export:
-        export_button = ttk.Button(
-            mode_frame,
-            text="Export PNG",
-            command=callbacks.export_png,
-        )
-        export_button.pack(fill=tk.X, pady=(6, 0))
-        Tooltip(export_button, "Export the current grid as a PNG image")
+    pattern_help.pack(fill=tk.X, pady=(0, 2))
 
     return pattern_combo, pattern_help
 
@@ -323,7 +304,7 @@ def _add_simulation_section(
     parent: ttk.Frame,
     variables: TkVars,
     callbacks: Callbacks,
-) -> tuple[tk.Button, ttk.Label]:
+) -> tuple[ttk.Button, ttk.Label]:
     """Add simulation controls and return start button and generation label."""
 
     frame = ttk.Labelframe(
@@ -331,10 +312,10 @@ def _add_simulation_section(
         text="Simulation",
         style="Card.TLabelframe",
     )
-    frame.pack(fill=tk.X, pady=(0, 10))
+    frame.pack(fill=tk.X, pady=(0, 4))
 
     toolbar = ttk.Frame(frame)
-    toolbar.pack(fill=tk.X, pady=(2, 0))
+    toolbar.pack(fill=tk.X, pady=(0, 0))
 
     start_button = ttk.Button(
         toolbar,
@@ -348,9 +329,9 @@ def _add_simulation_section(
 
     back_button = ttk.Button(
         toolbar,
-        text="Step Back",
+        text="Back",
         command=callbacks.step_back,
-        width=9,
+        width=7,
     )
     back_button.pack(side=tk.LEFT, padx=(0, 6))
     Tooltip(back_button, "Step backward one generation (Left Arrow)")
@@ -364,27 +345,9 @@ def _add_simulation_section(
     step_button.pack(side=tk.LEFT)
     Tooltip(step_button, "Advance one generation (S)")
 
-    clear_button = ttk.Button(
-        toolbar,
-        text="Clear",
-        command=callbacks.clear_grid,
-        width=7,
-    )
-    clear_button.pack(side=tk.LEFT, padx=(6, 0))
-    Tooltip(clear_button, "Clear the grid (C)")
-
-    reset_button = ttk.Button(
-        toolbar,
-        text="Reset",
-        command=callbacks.reset_simulation,
-        width=7,
-    )
-    reset_button.pack(side=tk.LEFT, padx=(6, 0))
-    Tooltip(reset_button, "Reset to initial pattern")
-
     # Speed slider with modern styling
     speed_frame = ttk.Frame(frame)
-    speed_frame.pack(fill=tk.X, pady=(8, 0))
+    speed_frame.pack(fill=tk.X, pady=(4, 0))
     speed_label = ttk.Label(speed_frame, text="Speed")
     speed_label.pack(anchor=tk.W)
     
@@ -394,7 +357,7 @@ def _add_simulation_section(
         to=100,
         orient=tk.HORIZONTAL,
         variable=variables.speed,
-        length=200,
+        length=160,
         showvalue=False,
         bg="#ffffff",
         fg="#0ea5e9",
@@ -405,31 +368,27 @@ def _add_simulation_section(
     speed_scale.pack(fill=tk.X, pady=(2, 0))
     Tooltip(speed_scale, "Adjust simulation speed (1 = slow, 100 = fast)")
 
-    grid_button = ttk.Button(frame, text="Toggle Grid", command=callbacks.toggle_grid)
-    grid_button.pack(fill=tk.X, pady=(8, 0))
-    Tooltip(grid_button, "Show/hide grid lines (G)")
-
     gen_label = ttk.Label(
         frame,
         text="Generation: 0",
         font=("Arial", 10, "bold"),
     )
-    gen_label.pack(anchor=tk.W, pady=(8, 0))
+    gen_label.pack(anchor=tk.W, pady=(4, 0))
 
     return start_button, gen_label
 
 
 def _add_population_section(
-    parent: ttk.Frame, callbacks: Callbacks
-) -> tuple[ttk.Label, tk.Canvas, ttk.Label]:
-    """Add the population stats card, chart, and export button."""
+    parent: ttk.Frame,
+) -> ttk.Label:
+    """Add a compact population summary card."""
 
     frame = ttk.Labelframe(
         parent,
         text="Population",
         style="Card.TLabelframe",
     )
-    frame.pack(fill=tk.X, pady=(0, 10))
+    frame.pack(fill=tk.X, pady=(0, 4))
     label = ttk.Label(
         frame,
         text="Live: 0 | Δ: +0 | Peak: 0 | Density: 0.0%",
@@ -438,148 +397,7 @@ def _add_population_section(
     )
     label.pack(anchor=tk.W)
 
-    chart = tk.Canvas(
-        frame, height=80, width=240, bg="#f8f8f8",
-        highlightthickness=1, highlightbackground="#ccc"
-    )
-    chart.pack(fill=tk.X, pady=(6, 4))
-    Tooltip(
-        chart, "Recent history of live cells / entropy / complexity"
-    )
-
-    cycle_label = ttk.Label(frame, text="Cycle: –", foreground="#555")
-    cycle_label.pack(anchor=tk.W, pady=(2, 0))
-
-    export_button = ttk.Button(frame, text="Export CSV", command=callbacks.export_metrics)
-    export_button.pack(fill=tk.X, pady=(6, 0))
-    Tooltip(export_button, "Save per-generation metrics to CSV")
-
-    return label, chart, cycle_label
-
-
-def _add_custom_rules_section(
-    parent: ttk.Frame,
-    callbacks: Callbacks,
-) -> tuple[ttk.Entry, ttk.Entry, ttk.Button]:
-    """Add the custom rule inputs and return the relevant widgets."""
-
-    frame = ttk.Labelframe(
-        parent,
-        text="Custom Rules",
-        style="Card.TLabelframe",
-    )
-    frame.pack(fill=tk.X, pady=(0, 10))
-
-    # Birth rule row
-    ttk.Label(frame, text="Birth", style="Muted.TLabel").pack(anchor=tk.W, pady=(0, 2))
-    birth_entry = ttk.Entry(frame, width=12)
-    birth_entry.pack(fill=tk.X, pady=(0, 6))
-    Tooltip(
-        birth_entry,
-        "Birth rule: digits (0-8) for neighbor counts that create life\nExample: 3 (Conway's Game of Life)"
-    )
-
-    # Survival rule row
-    ttk.Label(frame, text="Survival", style="Muted.TLabel").pack(anchor=tk.W, pady=(0, 2))
-    survival_entry = ttk.Entry(frame, width=12)
-    survival_entry.pack(fill=tk.X, pady=(0, 6))
-    Tooltip(
-        survival_entry,
-        "Survival rule: digits (0-8) for neighbor counts that sustain life\nExample: 23 (Conway's Game of Life)"
-    )
-
-    # Preset buttons row
-    presets_frame = ttk.Frame(frame)
-    presets_frame.pack(fill=tk.X, pady=(0, 6))
-    
-    ttk.Label(presets_frame, text="Presets:", style="Muted.TLabel").pack(side=tk.LEFT, padx=(0, 4))
-    
-    def _apply_preset(birth: str, survival: str) -> None:
-        birth_entry.delete(0, tk.END)
-        birth_entry.insert(0, birth)
-        survival_entry.delete(0, tk.END)
-        survival_entry.insert(0, survival)
-    
-    preset_buttons = [
-        ("Conway", "3", "23"),
-        ("HighLife", "36", "23"),
-        ("Seeds", "2", ""),
-        ("Life", "3", "0123456789"),
-    ]
-    
-    for preset_name, birth, survival in preset_buttons:
-        tooltip_text = f"Load {preset_name}: B{birth}/S{survival}"
-        btn = ttk.Button(
-            presets_frame,
-            text=preset_name,
-            width=8,
-            command=lambda b=birth, s=survival: _apply_preset(b, s),
-        )
-        btn.pack(side=tk.LEFT, padx=(0, 4))
-        Tooltip(btn, tooltip_text)
-
-    apply_button = ttk.Button(
-        frame,
-        text="Apply Rules",
-        command=callbacks.apply_custom_rules,
-    )
-    apply_button.pack(fill=tk.X)
-    Tooltip(apply_button, "Apply the custom birth/survival rules")
-
-    return birth_entry, survival_entry, apply_button
-
-
-def _add_grid_section(
-    parent: ttk.Frame,
-    variables: TkVars,
-    callbacks: Callbacks,
-) -> None:
-    """Add grid configuration controls."""
-
-    frame = ttk.Labelframe(
-        parent,
-        text="Grid",
-        style="Card.TLabelframe",
-    )
-    frame.pack(fill=tk.X, pady=(0, 10))
-
-    ttk.Label(frame, text="Preset").pack(anchor=tk.W)
-    size_combo = ttk.Combobox(
-        frame,
-        textvariable=variables.grid_size,
-        state="readonly",
-        values=["50x50", "100x100", "150x150", "200x200", "Custom"],
-    )
-    size_combo.pack(fill=tk.X, pady=(2, 6))
-    Tooltip(size_combo, "Choose a preset grid size")
-    size_combo.bind("<<ComboboxSelected>>", callbacks.size_preset_changed)
-
-    row = ttk.Frame(frame)
-    row.pack(fill=tk.X)
-    ttk.Label(row, text="W").pack(side=tk.LEFT)
-    width_spin = tk.Spinbox(
-        row,
-        from_=10,
-        to=500,
-        textvariable=variables.custom_width,
-        width=5,
-    )
-    width_spin.pack(side=tk.LEFT, padx=(4, 12))
-    Tooltip(width_spin, "Custom grid width (10-500)")
-    ttk.Label(row, text="H").pack(side=tk.LEFT)
-    height_spin = tk.Spinbox(
-        row,
-        from_=10,
-        to=500,
-        textvariable=variables.custom_height,
-        width=5,
-    )
-    height_spin.pack(side=tk.LEFT, padx=(4, 0))
-    Tooltip(height_spin, "Custom grid height (10-500)")
-
-    apply_size_button = ttk.Button(frame, text="Apply", command=callbacks.apply_custom_size)
-    apply_size_button.pack(fill=tk.X, pady=(6, 0))
-    Tooltip(apply_size_button, "Apply custom grid dimensions")
+    return label
 
 
 def _add_drawing_section(parent: ttk.Frame, variables: TkVars) -> None:
@@ -592,7 +410,10 @@ def _add_drawing_section(parent: ttk.Frame, variables: TkVars) -> None:
     )
     frame.pack(fill=tk.X)
 
-    ttk.Label(frame, text="Tool", style="Muted.TLabel").pack(anchor=tk.W, pady=(0, 4))
+    ttk.Label(frame, text="Tool", style="Muted.TLabel").pack(
+        anchor=tk.W,
+        pady=(0, 4),
+    )
     
     # Tool options in a compact row
     tools_frame = ttk.Frame(frame)
@@ -625,7 +446,10 @@ def _add_drawing_section(parent: ttk.Frame, variables: TkVars) -> None:
     eraser_radio.pack(side=tk.LEFT, padx=(16, 0))
     Tooltip(eraser_radio, "Click and drag to erase cells")
 
-    ttk.Label(frame, text="Symmetry", style="Muted.TLabel").pack(anchor=tk.W, pady=(0, 2))
+    ttk.Label(frame, text="Symmetry", style="Muted.TLabel").pack(
+        anchor=tk.W,
+        pady=(0, 2),
+    )
     symmetry_combo = ttk.Combobox(
         frame,
         textvariable=variables.symmetry,
