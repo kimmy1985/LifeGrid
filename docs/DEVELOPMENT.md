@@ -6,9 +6,11 @@ This document helps you navigate the codebase and contribute changes.
 ```
 LifeGrid/
 ├── src/
-│   └── main.py           # Main application (GUI + automata implementations)
+│   ├── main.py           # Thin entry point
+│   ├── patterns.py       # Built-in pattern definitions + descriptions
+│   ├── automata/         # Automaton implementations
+│   └── gui/              # GUI modules (app, config, state, ui, rendering)
 ├── examples/             # Example pattern files (JSON)
-├── backups/              # Development backups and temp files
 ├── docs/                 # Documentation
 │   ├── USER_GUIDE.md
 │   └── DEVELOPMENT.md
@@ -30,7 +32,10 @@ The application is organized under `src/` (automata + GUI). Key areas:
   - `LangtonsAnt`
   - `LifeLikeAutomaton` (Custom Rules)
 - GUI:
-  - Control panel creation (mode selection, patterns, save/load/export, rules, grid size, draw modes, symmetry, speed, grid toggle)
+  - Minimal left sidebar for vital controls (mode/pattern, start/step/back,
+    speed, drawing tools)
+  - Menubar for save/load/export and advanced configuration (custom rules,
+    grid/cell size, grid lines)
   - Canvas rendering (`update_display`) with optional grid lines
   - Drawing interactions (`on_canvas_click`, `on_canvas_drag`, `apply_draw_action`)
   - Simulation loop (`run_simulation`, `step_once`)
@@ -48,12 +53,7 @@ python src/main.py
 ```
 
 ## Development tasks (suggested roadmap)
-- Split `src/main.py` into modules:
-  - `src/automata/` for each automaton
-  - `src/gui/` for GUI and drawing utilities
-  - `src/patterns/` for built-in pattern definitions
-- Add unit tests (pytest) for automata step functions and pattern loaders
-- Add keyboard shortcuts (space for start/stop, S step, C clear, G toggle grid)
+- Add more unit tests (pytest) for automata step functions and pattern loaders
 - Add export GIF/MP4 recording option
 - Optimize rendering (only dirty cells update)
 
@@ -82,20 +82,16 @@ pytest tests/test_conway.py::test_blinker_oscillates -v
 ```
 
 ### Test Coverage
-Current test coverage includes:
-- **Conway's Game of Life** (`tests/test_conway.py`):
-  - Initialization and grid setup
-  - Known oscillators (blinker, toad)
-  - Still lifes (block)
-  - Spaceships (glider movement)
-  - User interactions (cell toggling via clicks)
-  - Edge cases (empty grid, reset functionality)
+Current test coverage is intentionally lightweight:
+- `tests/test_gui.py` provides basic GUI smoke tests.
+  - These are skipped automatically when Tk cannot be initialized
+    (e.g., no DISPLAY on Linux).
 
 ### Writing New Tests
 When adding tests for other automata or features:
 
 1. Create test files in `tests/` directory (e.g., `test_highlife.py`)
-2. Import the automaton class from `src.main`
+2. Import automata from `src/automata/` (preferred) or via the `automata` package
 3. Test known patterns and edge cases
 4. Verify step logic matches expected behavior
 

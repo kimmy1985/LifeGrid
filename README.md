@@ -22,8 +22,8 @@ editor, drawing tools, and quick exporting to PNG.
 - **Live statistics** for population deltas, peaks, and density.
 - **Save/Load** patterns as JSON and **export PNG** snapshots (when Pillow is
   installed).
-- **Keyboard shortcuts**: `Space` (start/stop), `S` (step), `C` (clear), `G`
-  (toggle grid).
+- **Keyboard shortcuts**: `Space` (start/stop), `S` (step), `Left` (step back),
+  `C` (clear), `G` (toggle grid).
 
 ---
 
@@ -61,8 +61,10 @@ Or use the helper script on Unix-like systems:
 1. Pick a mode from the **Mode** dropdown.
 2. Choose a **Pattern** or draw on the canvas.
 3. Press **Start** (or hit `Space`) to run the simulation.
-4. Adjust **Speed**, drawing tools, symmetry, and grid size as needed.
-5. Save patterns (`Save`) or export snapshots (`Export PNG`).
+4. Adjust **Speed**, drawing tools, and symmetry as needed.
+5. Use **Settings → Grid & View Settings…** for grid size, cell size, and grid
+  lines.
+6. Save/load/export from the **File** menu.
 
 ---
 
@@ -72,10 +74,11 @@ Or use the helper script on Unix-like systems:
 | --- | --- | --- |
 | Start/Stop simulation | Start button | `Space` |
 | Step one generation | Step button | `S` |
-| Clear grid | Clear button | `C` |
-| Toggle grid lines | Toggle Grid button | `G` |
-| Resize grid | Presets or custom width/height | – |
-| Apply custom B/S rule | Apply Rules | – |
+| Step back one generation | Back button | `Left` |
+| Clear grid | Simulation → Clear | `C` |
+| Toggle grid lines | Settings → Toggle Grid | `G` |
+| Resize grid | Settings → Grid & View Settings… | – |
+| Apply custom B/S rule | Settings → Custom Rules… | – |
 
 Mouse interactions:
 
@@ -93,7 +96,8 @@ Mouse interactions:
 - **Immigration Game**: Color Mix, Random Soup.
 - **Rainbow Game**: Rainbow Mix, Random Soup.
 - **Langton's Ant**: Empty.
-- **Custom Rules**: Random Soup starter pattern plus editable B/S fields.
+- **Custom Rules**: Random Soup starter pattern plus editable life-like B/S
+  rules via Settings.
 
 ---
 

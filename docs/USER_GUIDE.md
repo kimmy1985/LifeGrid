@@ -54,40 +54,33 @@ Or use the helper script:
 ---
 
 ## UI overview
-The top control panel is organized in rows.
+LifeGrid is organized around a **minimal left sidebar** for vital controls
+and a **menu bar** for everything else.
 
-1) **Mode & simulation controls**
-  - Mode: Choose an automaton.
-  - Start: Toggle run/pause (`Space`).
-  - Step: Advance one generation (`S`).
-  - Clear: Clear the grid (`C`).
-  - Reset: Return to the mode's initial state.
+### Left sidebar (vital controls)
+- **Automaton**
+  - Mode: choose an automaton.
+  - Pattern: choose a preset (loads immediately).
+  - Pattern description: a short explanation of the selected preset.
+- **Simulation**
+  - Start/Stop (`Space`)
+  - Step (`S`)
+  - Back (Step Back, `Left Arrow`) — rewinds using a short snapshot history.
+  - Speed slider (1–100)
+  - Generation label
+- **Population**
+  - A compact summary label (live cells, delta, peak, density)
+- **Drawing**
+  - Tool: Toggle / Pen / Eraser
+  - Symmetry: None / Horizontal / Vertical / Both / Radial
 
-2) **Patterns & persistence**
-  - Pattern: Select a preset; it loads immediately.
-  - Save: Write the current grid to JSON.
-  - Load File: Load a saved pattern.
-  - Export PNG: Save a snapshot (button appears when Pillow is installed).
+### Menu bar (everything else)
+- **File**: Save/Load pattern JSON, export CSV metrics, export PNG.
+- **Simulation**: Reset and Clear.
+- **Settings**: Grid & View Settings, Custom Rules editor + presets, Toggle Grid.
+- **Help**: shortcuts + About.
 
-3) **Custom rules** *(visible in Custom Rules mode)*
-  - B field: Digits for birth neighbor counts.
-  - S field: Digits for survival neighbor counts.
-  - Apply Rules: Apply the values and restart the automaton.
-
-4) **Grid size**
-  - Presets: 50×50, 100×100, 150×150, 200×200, Custom.
-  - Custom width/height (10–500) plus Apply.
-
-5) **Drawing tools & symmetry**
-  - Draw mode: Toggle, Pen, Eraser.
-  - Symmetry: None, Horizontal, Vertical, Both, Radial.
-
-6) **Speed & stats**
-  - Speed slider: Adjust simulation speed.
-  - Toggle Grid: Show/hide gridlines (`G`).
-  - Statistics label: Live cells, delta, peak, density.
-
-Canvas: The large white area renders the automaton.
+Canvas: The large area on the right renders the automaton.
 
 ---
 
@@ -125,14 +118,21 @@ Tip: For precise editing, pause the simulation and enable grid lines.
 ---
 
 ## Resizing the grid
-Use presets (50x50, 100x100, 150x150, 200x200) or set custom W/H and Apply. Resizing recreates the automaton for the new size.
+Open **Settings → Grid & View Settings…**.
+
+- Choose a preset (50x50, 100x100, 150x150, 200x200) or choose Custom and
+  set W/H.
+- Adjust **Cell Size** to change how large each cell is drawn.
+
+Applying grid changes recreates the automaton for the new size.
 
 ---
 
 ## Saving, loading, and exporting
-- Save: Writes a JSON file with mode, width, height, and the grid state
-- Load File: Reads a JSON file created by the app and restores the state (mode and size will be applied)
-- Export PNG: Saves a PNG image of the current grid (requires Pillow)
+- Save Pattern… (File menu): Writes a JSON file with mode, width, height, and the grid state.
+- Load Pattern… (File menu): Reads a JSON file created by the app and restores the state.
+- Export Metrics (CSV)… (File menu): Saves per-generation metrics to CSV.
+- Export PNG… (File menu): Saves a PNG image of the current grid (requires Pillow).
 
 Tip: Keep your pattern files in the `examples/` folder for easy sharing.
 
@@ -153,15 +153,21 @@ Tip: Keep your pattern files in the `examples/` folder for easy sharing.
 - Export PNG button missing
   - Pillow is optional; install it with `pip install Pillow`
 - Slow performance on very large grids
-  - Reduce grid size or cell size; ensure SciPy is installed
+  - Reduce grid size or increase cell size; ensure SciPy is installed
 
 ---
 
 ## FAQ
 - Can I add my own rules?
-  - Yes. Switch to Custom Rules and set B (birth) and S (survival) fields, then Apply Rules.
+  - Yes. Use Settings → Custom Rules… (or Settings → Rule Presets). The app will
+    switch to Custom Rules mode and apply the B/S values.
 - Are there keyboard shortcuts?
-  - Currently, controls are provided via buttons and mouse interactions on canvas.
+  - Yes:
+    - `Space` Start/Stop
+    - `S` Step
+    - `Left Arrow` Step Back
+    - `C` Clear
+    - `G` Toggle grid
 - Can I export animations/GIFs?
   - Not yet. PNG snapshots are supported; animations can be added in the future.
 
