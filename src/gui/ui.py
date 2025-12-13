@@ -243,6 +243,16 @@ def _add_automaton_section(
         lambda _event: callbacks.load_pattern(),
     )
 
+    pattern_help = ttk.Label(
+        mode_frame,
+        text="",
+        wraplength=320,
+        style="TLabel",
+        foreground="#555",
+        justify=tk.LEFT,
+    )
+    pattern_help.pack(fill=tk.X, pady=(0, 6))
+
     row = ttk.Frame(mode_frame)
     row.pack(fill=tk.X, pady=(4, 0))
     save_button = ttk.Button(row, text="Save", command=callbacks.save_pattern)
@@ -260,7 +270,7 @@ def _add_automaton_section(
         export_button.pack(fill=tk.X, pady=(6, 0))
         Tooltip(export_button, "Export the current grid as a PNG image")
 
-    return pattern_combo
+    return pattern_combo, pattern_help
 
 
 def _add_simulation_section(
